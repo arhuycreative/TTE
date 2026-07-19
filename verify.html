@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>Verifikasi Dokumen</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center p-4 font-sans" onload="loadData()">
+
+  <!-- (Struktur div UI Verify persis sama dengan sebelumnya) -->
+  <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-md relative overflow-hidden">
+    <div id="statusHeader" class="absolute top-0 left-0 w-full h-2 bg-gray-600"></div>
+    <div class="text-center mb-6 mt-2">
+      <h2 class="text-2xl font-bold">Status Dokumen</h2>
+      <p id="statusText" class="text-gray-400 mt-1">Memeriksa keaslian dokumen...</p>
+    </div>
+    <div id="dataContainer" class="space-y-4 hidden">
+      <div class="pb-2"><p class="text-xs text-gray-400">Nomor</p><p id="v-nomor" class="font-medium">-</p></div>
+      <div class="pb-2"><p class="text-xs text-gray-400">Perihal</p><p id="v-perihal" class="font-medium">-</p></div>
+      <div class="pb-2"><p class="text-xs text-gray-400">Tanggal</p><p id="v-tanggal" class="font-medium">-</p></div>
+      <div class="pb-2"><p class="text-xs text-gray-400">Pembuat</p><p id="v-pembuat" class="font-medium">-</p></div>
+      <div class="pt-4 mt-2">
+         <a id="v-url" href="#" target="_blank" class="w-full flex justify-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded">Lihat File Asli</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // MASUKKAN URL GAS API BAPAK DI SINI
+    const GAS_API_URL = "ISI_DENGAN_URL_GAS_API_BAPAK_YANG_BERAKHIRAN_EXEC"; 
+
+    async function loadData() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const docId = urlParams.get('id');
+
+      const statusText = document.getElementById('statusText');
+      const statusHeader = document.getElementById('statusHeader');
+      const dataContainer = document.getElementById('dataContainer');
+
+      if(!docId) {
+        statusText.innerText = "ID Dokumen Tidak Valid";
+        statusText.classList.replace('text-gray-400', 'text-red-400');
+        statusHeader.classList.replace('bg-gray-600', 'bg-red-500');
+        return;
+      }
+
+      try {
+        const response = await fetch(GAS_API_URL + "?action=verify&id=" + docId);
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          statusText.innerText = "DOKUMEN VALID";
+          statusText.classList.replace('text-gray-400', 'text-green-400');
+          statusHeader.classList.replace('bg-gray-600', 'bg-green-500');
+          
+          document.getElementById('v-nomor').innerText = result.data.nomor;
+          document.getElementById('v-perihal').innerText = result.data.perihal;
+          document.getElementById('v-tanggal').innerText = result.data.tanggal;
+          document.getElementById('v-pembuat').innerText = result.data.pembuat;
+          document.getElementById('v-url').href = result.data.url;
+
+          dataContainer.classList.remove('hidden');
+        } else {
+          throw new Error('Not Found');
+        }
+      } catch (err) {
+        statusText.innerText = "DOKUMEN TIDAK DITEMUKAN / PALSU";
+        statusText.classList.replace('text-gray-400', 'text-red-400');
+        statusHeader.classList.replace('bg-gray-600', 'bg-red-500');
+      }
+    }
+  </script>
+</body>
+</html>
