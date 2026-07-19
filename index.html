@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>Upload Dokumen TTE</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center p-4 font-sans">
+
+  <!-- (Bagian Form HTML sama seperti sebelumnya, saya persingkat di sini, gunakan struktur form HTML yang persis sama) -->
+  <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-lg border border-gray-700">
+    <h2 class="text-2xl font-bold mb-6 text-center text-blue-400">Digital Signature System</h2>
+    <form id="uploadForm" onsubmit="processForm(event)">
+      <div class="mb-4"><label class="block text-sm font-medium mb-1">Nomor Dokumen</label><input type="text" id="nomor" required class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded"></div>
+      <div class="mb-4"><label class="block text-sm font-medium mb-1">Perihal</label><input type="text" id="perihal" required class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded"></div>
+      <div class="mb-4"><label class="block text-sm font-medium mb-1">Tanggal Rilis</label><input type="date" id="tanggal" required class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded"></div>
+      <div class="mb-4"><label class="block text-sm font-medium mb-1">Pembuat Dokumen</label><input type="text" id="pembuat" required class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded"></div>
+      <div class="mb-6"><label class="block text-sm font-medium mb-1">Upload File PDF</label><input type="file" id="pdfFile" accept="application/pdf" required class="w-full"></div>
+      <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded">Tandatangani & Upload</button>
+    </form>
+  </div>
+
+  <script>
+    // MASUKKAN URL YANG BENAR DI SINI:
+    const GAS_API_URL = "ISI_DENGAN_URL_GAS_API_BAPAK_YANG_BERAKHIRAN_EXEC"; 
+    const GITHUB_VERIFY_URL = "https://[username_bapak].github.io/sistem-tte/verify.html";
+
+    function arrayBufferToBase64(buffer) {
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.byteLength; i++) { binary += String.fromCharCode(bytes[i]); }
+      return window.btoa(binary);
+    }
+
+    async function processForm(event) {
+      event.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.innerText = "Memproses..."; btn.disabled = true;
+
+      try {
+        const docId = 'DOC-' + Date.now();
+        // QR Code sekarang mengarah ke GitHub Bapak, BUKAN ke script Google!
+        const verifyUrl = GITHUB_VERIFY_URL + "?id=" + docId;
+
+        // PROSES CANVAS (Frame & Teks)
+        const baseQrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 130, margin: 0 });
+        const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+        const cWidth = 160; const cHeight = 200; canvas.width = cWidth; canvas.height = cHeight;
+        
+        const radius = 16;
+        ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#000000'; ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(radius, 0); ctx.lineTo(cWidth - radius, 0); ctx.quadraticCurveTo(cWidth, 0, cWidth, radius);
+        ctx.lineTo(cWidth, cHeight - radius); ctx.quadraticCurveTo(cWidth, cHeight, cWidth - radius, cHeight);
+        ctx.lineTo(radius, cHeight); ctx.quadraticCurveTo(0, cHeight, 0, cHeight - radius);
+        ctx.lineTo(0, radius); ctx.quadraticCurveTo(0, 0, radius, 0);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        
+        ctx.fillStyle = '#000000'; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('Scan For Verification', cWidth / 2, cHeight - 20);
+        
+        const qrImg = new Image(); qrImg.src = baseQrDataUrl;
+        await new Promise(r => qrImg.onload = r);
+        ctx.drawImage(qrImg, (cWidth - 130) / 2, 15, 130, 130);
+        
+        const qrBytes = await (await fetch(canvas.toDataURL('image/png'))).arrayBuffer();
+
+        // PROSES PDF
+        const fileInput = document.getElementById('pdfFile').files[0];
+        const pdfDoc = await PDFLib.PDFDocument.load(await fileInput.arrayBuffer());
+        const qrImage = await pdfDoc.embedPng(qrBytes);
+        const firstPage = pdfDoc.getPages()[0]; 
+        
+        firstPage.drawImage(qrImage, {
+          x: firstPage.getSize().width - 95 - 30, y: 130, width: 95, height: 118
+        });
+
+        const base64Data = arrayBufferToBase64(await pdfDoc.save());
+
+        // KIRIM KE APPS SCRIPT (API)
+        btn.innerText = "Mengupload ke Server...";
+        
+        const payload = {
+          metadata: {
+            id: docId,
+            nomor: document.getElementById('nomor').value,
+            perihal: document.getElementById('perihal').value,
+            tanggal: document.getElementById('tanggal').value,
+            pembuat: document.getElementById('pembuat').value
+          },
+          fileBase64: base64Data,
+          filename: fileInput.name
+        };
+
+        const response = await fetch(GAS_API_URL, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        
+        const result = await response.json();
+        
+        if(result.success) {
+          alert('Sukses! PDF diupload.');
+          document.getElementById('uploadForm').reset();
+        } else {
+          alert('Gagal dari Server: ' + result.error);
+        }
+
+      } catch (error) {
+        alert("Terjadi kesalahan sistem: " + error.message);
+      }
+      
+      btn.innerText = "Tandatangani & Upload"; btn.disabled = false;
+    }
+  </script>
+</body>
+</html>
