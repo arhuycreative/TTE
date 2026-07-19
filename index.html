@@ -75,7 +75,7 @@
         const firstPage = pdfDoc.getPages()[0]; 
         
         firstPage.drawImage(qrImage, {
-          x: firstPage.getSize().width - 95 - 30, y: 130, width: 95, height: 118
+          x: firstPage.getSize().width - 95 - 40, y: 40, width: 95, height: 118
         });
 
         const base64Data = arrayBufferToBase64(await pdfDoc.save());
